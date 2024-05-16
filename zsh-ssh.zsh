@@ -12,7 +12,7 @@ SSH_CONFIG_FILE="${SSH_CONFIG_FILE:-$HOME/.ssh/config}"
 # Parse the file and handle the include directive.
 _parse_config_file() {
   # Enable PCRE matching
-  setopt localoptions rematchpcre
+  setopt localoptions rematchpcre globdots
   unsetopt nomatch
 
   local config_file_path=$(realpath "$1")
@@ -45,6 +45,8 @@ _ssh_host_list() {
   ssh_config=$(_parse_config_file $SSH_CONFIG_FILE)
   ssh_config=$(echo $ssh_config | command grep -v -E "^\s*#[^_]")
 
+  # @TODO load awk script from file
+  # host_list=$(echo $ssh_config | command awk -f "${${(%):-%x}:A}/host_list_process.awk")
   host_list=$(echo $ssh_config | command awk '
     function join(array, start, end, sep, result, i) {
       # https://www.gnu.org/software/gawk/manual/html_node/Join-Function.html
@@ -89,10 +91,8 @@ _ssh_host_list() {
       match_directive = ""
 
       # Use spaces to ensure the column command maintains the correct number of columns.
-      #   - user
       #   - desc_formated
 
-      user = " "
       host_name = ""
       alias = ""
       desc = ""
@@ -107,9 +107,7 @@ _ssh_host_list() {
         value = tmp[2]
 
         if (key == "match") { match_directive = value }
-
         if (key == "host") { aliases = value }
-        if (key == "user") { user = value }
         if (key == "hostname") { host_name = value }
         if (key == "#_desc") { desc = value }
       }
@@ -127,7 +125,7 @@ _ssh_host_list() {
         }
 
         if ((host_name && !starts_or_ends_with_star(host_name)) && (alias && !starts_or_ends_with_star(alias)) && !match_directive) {
-          host = sprintf("%s|->|%s|%s|%s\n", alias, host_name, user, desc_formated)
+          host = sprintf("%s|->|%s|%s\n", alias, host_name, desc_formated)
           host_list = host_list host
         }
       }
@@ -161,13 +159,13 @@ _fzf_list_generator() {
   fi
 
   header="
-Alias|->|Hostname|User|Desc
-─────|──|────────|────|────
+Alias|->|Hostname|Desc
+─────|──|────────|────
 "
 
   host_list="${header}\n${host_list}"
 
-  echo $host_list | command column -t -s '|'
+  echo -e $host_list | command column -t -s '|'
 }
 
 _set_lbuffer() {
@@ -220,7 +218,7 @@ fzf_complete_ssh() {
       --prompt='SSH Remote > ' \
       --no-separator \
       --bind 'shift-tab:up,tab:down,bspace:backward-delete-char/eof' \
-      --preview 'ssh -T -G $(cut -f 1 -d " " <<< {}) | grep -i -E "^User |^HostName |^Port |^ControlMaster |^ForwardAgent |^LocalForward |^IdentityFile |^RemoteForward |^ProxyCommand |^ProxyJump " | column -t' \
+      --preview 'ssh -T -G $(cut -f 1 -d " " <<< {}) | grep -i -E "^Host |^User |^HostName |^Port |^ControlMaster |^ForwardAgent |^LocalForward |^IdentityFile |^RemoteForward |^ProxyCommand |^ProxyJump " | column -t' \
       --preview-window=right:40%
     )
 
